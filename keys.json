@@ -4,5 +4,11 @@
     "note": "Khánh",
     "expiry": "2026-10-19",
     "device_id": null
+  },
+  {
+    "key": "TRANVIET-KOTI-O2EV",
+    "note": "Khách Vip",
+    "expiry": "2026-10-19",
+    "device_id": null
   }
 ]
