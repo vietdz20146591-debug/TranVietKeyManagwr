@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tran Viet - Key Manager Panel</title>
+    <style>
+        body { background: #121212; color: #fff; font-family: Arial, sans-serif; padding: 20px; margin: 0; }
+        .card { background: #1e1e1e; padding: 20px; margin-bottom: 20px; border-radius: 12px; border: 1px solid #333; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        h2, h3 { color: #f39c12; margin-top: 0; }
+        input, select, button { padding: 12px; margin-top: 8px; background: #2c2c2c; color: #fff; border: 1px solid #444; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 14px; }
+        button { background: #e74c3c; cursor: pointer; font-weight: bold; transition: background 0.3s; }
+        button:hover { background: #c0392b; }
+        .radio-group { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
+        .radio-btn { background: #2c2c2c; padding: 10px; text-align: center; border-radius: 6px; border: 1px solid #444; cursor: pointer; }
+        .radio-btn input { width: auto; margin-right: 5px; }
+        .key-item { background: #252525; padding: 12px; margin-top: 10px; border-radius: 6px; border-left: 4px solid #2ecc71; }
+    </style>
+</head>
+<body>
+
+    <h2>🔑 TRANVIET - KEY MANAGER PANEL</h2>
+    
+    <!-- Cấu hình GitHub Token -->
+    <div class="card">
+        <h3>⚙️ Cấu hình GitHub Token</h3>
+        <input type="password" id="githubToken" placeholder="Nhập GitHub Personal Access Token (Repo Read/Write)">
+        <button onclick="saveToken()">Lưu Token</button>
+    </div>
+
+    <!-- Tạo Key Mới với các tùy chọn hạn -->
+    <div class="card">
+        <h3>⚡ Tạo Key Mới</h3>
+        <input type="text" id="keyNote" placeholder="Tên gợi nhớ (VD: Khách VIP - Anh Minh)">
+        
+        <label style="margin-top: 15px; display: block; font-weight: bold;">Hạn sử dụng:</label>
+        <div class="radio-group">
+            <label class="radio-btn"><input type="radio" name="expiryOption" value="1" checked> 1 Ngày</label>
+            <label class="radio-btn"><input type="radio" name="expiryOption" value="7"> 1 Tuần</label>
+            <label class="radio-btn"><input type="radio" name="expiryOption" value="30"> 1 Tháng</label>
+            <label class="radio-btn"><input type="radio" name="expiryOption" value="365"> 1 Năm</label>
+            <label class="radio-btn" style="grid-column: span 2;"><input type="radio" name="expiryOption" value="infinite"> ∞ Vĩnh viễn</label>
+        </div>
+
+        <button onclick="createNewKey()" style="margin-top: 15px; background: #27ae60;">🚀 Tạo Key Ngay</button>
+    </div>
+
+    <!-- Danh sách Keys -->
+    <div class="card">
+        <h3>📋 Danh sách Keys</h3>
+        <button onclick="loadKeys()" style="background: #2980b9; margin-bottom: 10px;">🔄 Tải lại danh sách</button>
+        <div id="keyList">Chưa tải dữ liệu hoặc chưa nhập Token...</div>
+    </div>
+
+    <script>
+        // Cấu hình thông tin Repository GitHub của bạn
+        const repoOwner = "lmd140809";  // Thay bằng username GitHub của bạn
+        const repoName = "MinhDux";      // Thay bằng tên Repository của bạn
+        const filePath = "keys.json";
+
+        // Tự động điền token nếu đã lưu trước đó
+        window.onload = function() {
+            const savedToken = localStorage.getItem("gh_token");
+            if (savedToken) {
+                document.getElementById("githubToken").value = savedToken;
+                loadKeys();
+            }
+        }
+
+        function saveToken() {
+            const token = document.getElementById("githubToken").value.trim();
+            localStorage.setItem("gh_token", token);
+            alert("Đã lưu Token thành công!");
+            loadKeys();
+        }
+
+        // Hàm tính toán ngày hết hạn dựa trên số ngày được chọn
+        function calculateExpiryDate(days) {
+            if (days === "infinite") return "infinite";
+            let date = new Date();
+            date.setDate(date.getDate() + parseInt(days));
+            return date.toISOString().split('T')[0]; // Định dạng YYYY-MM-DD
+        }
+
+        // Tạo chuỗi Key ngẫu nhiên
+        function generateKeyString() {
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            let randomPart = "";
+            for (let i = 0; i < 8; i++) {
+                randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return `TRANVIET-${randomPart.slice(0,4)}-${randomPart.slice(4,8)}`;
+        }
+
+        async function loadKeys() {
+            const token = localStorage.getItem("gh_token");
+            if (!token) {
+                alert("Vui lòng nhập và lưu GitHub Token trước!");
+                return;
+            }
+
+            document.getElementById("keyList").innerHTML = "Đang tải dữ liệu từ GitHub...";
+            try {
+                let res = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${filePath}`, {
+                    headers: { "Authorization": `token ${token}` }
+                });
+                
+                if (!res.ok) throw new Error("Không thể kết nối hoặc sai Token/Repo!");
+
+                let fileData = await res.json();
+                let content = JSON.parse(decodeURIComponent(escape(atob(fileData.content))));
+                
+                window.currentFileSha = fileData.sha; // Lưu SHA để phục vụ việc update file sau này
+                window.currentKeysArray = content;
+
+                let html = "";
+                content.forEach(k => {
+                    html += `<div class="key-item">
+                        <b>🔑 ${k.key}</b><br>
+                        <small>📝 Ghi chú: ${k.note || 'Không có'}</small><br>
+                        <small>⏳ Hạn sử dụng: <b>${k.expiry}</b></small>
+                    </div>`;
+                });
+                document.getElementById("keyList").innerHTML = html || "Chưa có key nào.";
+            } catch (error) {
+                document.getElementById("keyList").innerHTML = "Lỗi khi tải dữ liệu: " + error.message;
+            }
+        }
+
+        async function createNewKey() {
+            const token = localStorage.getItem("gh_token");
+            const note = document.getElementById("keyNote").value.trim();
+            const selectedRadio = document.querySelector('input[name="expiryOption"]:checked');
+            
+            if (!token) {
+                alert("Vui lòng nhập GitHub Token!");
+                return;
+            }
+
+            const daysValue = selectedRadio.value;
+            const expiryDate = calculateExpiryDate(daysValue);
+            const newKeyString = generateKeyString();
+
+            let newKeyObj = {
+                key: newKeyString,
+                note: note || "Không có ghi chú",
+                expiry: expiryDate,
+                device_id: null
+            };
+
+            if (!window.currentKeysArray) {
+                window.currentKeysArray = [];
+            }
+
+            window.currentKeysArray.push(newKeyObj);
+
+            // Gói dữ liệu để đẩy lên GitHub API
+            let updatedContent = btoa(unescape(encodeURIComponent(JSON.stringify(window.currentKeysArray, null, 2))));
+
+            try {
+                let res = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${filePath}`, {
+                    method: "PUT",
+                    headers: {
+                        "Authorization": `token ${token}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        message: `Add new key: ${newKeyString}`,
+                        content: updatedContent,
+                        sha: window.currentFileSha
+                    })
+                });
+
+                if (res.ok) {
+                    alert(`Tạo thành công Key:\n${newKeyString}`);
+                    document.getElementById("keyNote").value = "";
+                    loadKeys(); // Tải lại danh sách
+                } else {
+                    let errData = await res.json();
+                    alert("Lỗi khi lưu lên GitHub: " + errData.message);
+                }
+            } catch (e) {
+                alert("Lỗi kết nối: " + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
